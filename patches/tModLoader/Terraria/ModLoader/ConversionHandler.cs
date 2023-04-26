@@ -1,14 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Microsoft.Xna.Framework;
 using Terraria.DataStructures;
-using Terraria.Graphics;
 using Terraria.ID;
-using Terraria;
-using static Terraria.GameContent.Animations.Actions.Sprites;
 
 namespace Terraria.ModLoader;
 
@@ -148,7 +144,7 @@ public sealed class ConversionHandler
 	public static void Convert(int index, int i, int j, ConversionSettings? settings = default)
 	{
 		settings ??= new(true, true, true);
-		ConvertInternal(index, i, j, settings.Value, ref MemoryMarshal.GetArrayDataReference(data));
+		ConvertInternal(index, i, j, settings.Value);
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -186,7 +182,7 @@ public sealed class ConversionHandler
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static void ConvertTile(int index, Point coordinate, ConversionSettings? settings = default) => ConvertTile(index, coordinate.X, coordinate.Y, settings);
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static void ConvertTile(int index, int i, int j, ConversionSettings? settings = default) => ConvertTileInternal(index, i, j, settings, ref MemoryMarshal.GetArrayDataReference(data));
+	public static void ConvertTile(int index, int i, int j, ConversionSettings? settings = default) => ConvertTileInternal(index, i, j, settings);
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static void ConvertTile(Conversion conversion, Point16 coordinate, int size, ConversionSettings? settings = default) => ConvertTile(conversion.Index, coordinate.X, coordinate.Y, size, settings);
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -222,7 +218,7 @@ public sealed class ConversionHandler
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static void ConvertWall(int index, Point coordinate, ConversionSettings? settings = default) => ConvertWall(index, coordinate.X, coordinate.Y, settings);
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static void ConvertWall(int index, int i, int j, ConversionSettings? settings = default) => ConvertWallInternal(index, i, j, settings, ref MemoryMarshal.GetArrayDataReference(data));
+	public static void ConvertWall(int index, int i, int j, ConversionSettings? settings = default) => ConvertWallInternal(index, i, j, settings);
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static void ConvertWall(Conversion conversion, Point16 coordinate, int size, ConversionSettings? settings = default) => ConvertWall(conversion.Index, coordinate.X, coordinate.Y, size, settings);
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -243,11 +239,9 @@ public sealed class ConversionHandler
 	#endregion
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static unsafe void ConvertSizedInternal(int index, int i, int j, int size, ConversionSettings? settings, delegate* managed<int, int, int, ConversionSettings?, ref Conversion.BlockConversion, void> convertCall)
+	private static unsafe void ConvertSizedInternal(int index, int i, int j, int size, ConversionSettings? settings, delegate* managed<int, int, int, ConversionSettings?, void> convertCall)
 	{
 		settings ??= new ConversionSettings(true, true, true);
-
-		ref var arrayData = ref MemoryMarshal.GetArrayDataReference(data);
 
 		int startX = i - size;
 		int endX = i + size;
@@ -257,28 +251,28 @@ public sealed class ConversionHandler
 			int k = startY;
 			for (; k <= endY - (endY % 4); k += 4) {
 				if (WorldGen.InWorld(l, k, 1) && Math.Abs(l - i) + Math.Abs(k - j) < 6) {
-					convertCall(index, l, k, settings.Value, ref arrayData);
+					convertCall(index, l, k, settings.Value);
 				}
 				if (WorldGen.InWorld(l, k + 1, 1) && Math.Abs(l - i) + Math.Abs(k - j + 1) < 6) {
-					convertCall(index, l, k + 1, settings.Value, ref arrayData);
+					convertCall(index, l, k + 1, settings.Value);
 				}
 				if (WorldGen.InWorld(l, k + 2, 1) && Math.Abs(l - i) + Math.Abs(k - j + 2) < 6) {
-					convertCall(index, l, k + 2, settings.Value, ref arrayData);
+					convertCall(index, l, k + 2, settings.Value);
 				}
 				if (WorldGen.InWorld(l, k + 3, 1) && Math.Abs(l - i) + Math.Abs(k - j + 3) < 6) {
-					convertCall(index, l, k + 3, settings.Value, ref arrayData);
+					convertCall(index, l, k + 3, settings.Value);
 				}
 			}
 			for (; k <= endY; k++) {
 				if (WorldGen.InWorld(l, k, 1) && Math.Abs(l - i) + Math.Abs(k - j) < 6) {
-					convertCall(index, l, k, settings.Value, ref arrayData);
+					convertCall(index, l, k, settings.Value);
 				}
 			}
 		}
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static void ConvertTileInternal(int index, int i, int j, ConversionSettings? settings, ref Conversion.BlockConversion arrayDataReference)
+	private static void ConvertTileInternal(int index, int i, int j, ConversionSettings? settings)
 	{
 		settings ??= new ConversionSettings(true, true, true);
 
@@ -288,16 +282,16 @@ public sealed class ConversionHandler
 
 		var tile = Main.tile[i, j];
 		ushort oldTile = tile.TileType;
-		var convertedTile = Unsafe.Add(ref arrayDataReference, TileIndex(index, oldTile));
+		int tileIndex = TileIndex(index, oldTile);
 
 		byte transformations = 0;
 
-		ConvertInternal_RunHooks(ref convertedTile, ref tile, ref i, ref j, settings.Value, out var preConvTileVal);
+		ConvertInternal_RunHooks(tileIndex, ref tile, ref i, ref j, settings.Value, out var preConvTileVal);
 
 		const ConversionRunCodeValues mask = ConversionRunCodeValues.Break;
 		transformations |= (byte)((int)(preConvTileVal & mask) << 1);
 
-		ConvertInternal_ConvertIfRuns(ref convertedTile, ref preConvTileVal, ref tile, ref tile.TileType, ref oldTile, ref i, ref j, ref transformations, settings.Value, wasCalled, breakTile, replacedTile);
+		ConvertInternal_ConvertIfRuns(tileIndex, ref preConvTileVal, ref tile, ref tile.TileType, ref oldTile, ref i, ref j, ref transformations, settings.Value, wasCalled, breakTile, replacedTile);
 
 		if (Main.netMode == NetmodeID.MultiplayerClient && (transformations & breakTile) > 0) {
 			if ((transformations & breakTile) > 0) {
@@ -314,7 +308,7 @@ public sealed class ConversionHandler
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static void ConvertWallInternal(int index, int i, int j, ConversionSettings? settings, ref Conversion.BlockConversion arrayDataReference)
+	private static void ConvertWallInternal(int index, int i, int j, ConversionSettings? settings)
 	{
 		settings ??= new ConversionSettings(true, true, true);
 
@@ -324,16 +318,16 @@ public sealed class ConversionHandler
 
 		var tile = Main.tile[i, j];
 		ushort oldWall = tile.WallType;
-		var convertedWall = Unsafe.Add(ref arrayDataReference, WallIndex(index, oldWall));
+		int wallIndex = WallIndex(index, oldWall);
 
 		byte transformations = 0;
 
-		ConvertInternal_RunHooks(ref convertedWall, ref tile, ref i, ref j, settings.Value, out var preConvWallVal);
+		ConvertInternal_RunHooks(wallIndex, ref tile, ref i, ref j, settings.Value, out var preConvWallVal);
 
 		const ConversionRunCodeValues mask = ConversionRunCodeValues.Break;
 		transformations |= (byte)((int)(preConvWallVal & mask) << 5);
 
-		ConvertInternal_ConvertIfRuns(ref convertedWall, ref preConvWallVal, ref tile, ref tile.WallType, ref oldWall, ref i, ref j, ref transformations, settings.Value, wasCalledW, breakTileW, replacedTileW);
+		ConvertInternal_ConvertIfRuns(wallIndex, ref preConvWallVal, ref tile, ref tile.WallType, ref oldWall, ref i, ref j, ref transformations, settings.Value, wasCalledW, breakTileW, replacedTileW);
 
 		if (Main.netMode == NetmodeID.MultiplayerClient && (transformations & breakTileW) > 0) {
 			if ((transformations & breakTileW) > 0) {
@@ -351,7 +345,7 @@ public sealed class ConversionHandler
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static void ConvertInternal(int index, int i, int j, ConversionSettings? settings, ref Conversion.BlockConversion arrayDataReference)
+	private static void ConvertInternal(int index, int i, int j, ConversionSettings? settings)
 	{
 		const int wasCalled =		0b0000_0001;
 		const int breakTile =		0b0000_0010;
@@ -363,20 +357,21 @@ public sealed class ConversionHandler
 		var tile = Main.tile[i, j];
 		ushort oldTile = tile.TileType;
 		ushort oldWall = tile.WallType;
-		var convertedTile = Unsafe.Add(ref arrayDataReference, TileIndex(index, oldTile));
-		var convertedWall = Unsafe.Add(ref arrayDataReference, WallIndex(index, oldWall));
+
+		int tileIndex = TileIndex(index, oldTile);
+		int wallIndex = WallIndex(index, oldWall);
 
 		byte transformations = 0;
 
-		ConvertInternal_RunHooks(ref convertedTile, ref tile, ref i, ref j, settings.Value, out var preConvTileVal);
-		ConvertInternal_RunHooks(ref convertedWall, ref tile, ref i, ref j, settings.Value, out var preConvWallVal);
+		ConvertInternal_RunHooks(tileIndex, ref tile, ref i, ref j, settings.Value, out var preConvTileVal);
+		ConvertInternal_RunHooks(wallIndex, ref tile, ref i, ref j, settings.Value, out var preConvWallVal);
 
 		const ConversionRunCodeValues mask = ConversionRunCodeValues.Break;
 		transformations |= (byte)((int)(preConvTileVal & mask) << 1);
 		transformations |= (byte)((int)(preConvWallVal & mask) << 5);
 
-		ConvertInternal_ConvertIfRuns(ref convertedTile, ref preConvTileVal, ref tile, ref tile.TileType, ref oldTile, ref i, ref j, ref transformations, settings.Value, wasCalled, breakTile, replacedTile);
-		ConvertInternal_ConvertIfRuns(ref convertedWall, ref preConvWallVal, ref tile, ref tile.WallType, ref oldWall, ref i, ref j, ref transformations, settings.Value, wasCalledW, breakTileW, replacedTileW);
+		ConvertInternal_ConvertIfRuns(tileIndex, ref preConvTileVal, ref tile, ref tile.TileType, ref oldTile, ref i, ref j, ref transformations, settings.Value, wasCalled, breakTile, replacedTile);
+		ConvertInternal_ConvertIfRuns(wallIndex, ref preConvWallVal, ref tile, ref tile.WallType, ref oldWall, ref i, ref j, ref transformations, settings.Value, wasCalledW, breakTileW, replacedTileW);
 
 		if (Main.netMode == NetmodeID.MultiplayerClient && (transformations & (breakTile | breakTileW)) > 0) {
 			if ((transformations & breakTile) > 0) {
@@ -399,10 +394,10 @@ public sealed class ConversionHandler
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static void ConvertInternal_RunHooks(ref Conversion.BlockConversion block, ref Tile tile, ref int i, ref int j, ConversionSettings settings, out ConversionRunCodeValues value)
+	private static void ConvertInternal_RunHooks(int blockIndex, ref Tile tile, ref int i, ref int j, ConversionSettings settings, out ConversionRunCodeValues value)
 	{
 		value = ConversionRunCodeValues.Run;
-		/*if (block?.PreConversionHooks != null) {
+		/*if (data[blockIndex].PreConversionHooks != null) {
 			foreach (var hook in block?.PreConversionHooks) {
 				var hookValue = hook(tile, i, j, settings);
 				if (hookValue != ConversionRunCodeValues.Run) {
@@ -414,15 +409,15 @@ public sealed class ConversionHandler
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-	private static void ConvertInternal_ConvertIfRuns(ref Conversion.BlockConversion block, ref ConversionRunCodeValues value,
+	private static void ConvertInternal_ConvertIfRuns(int blockIndex, ref ConversionRunCodeValues value,
 		ref Tile tile, ref ushort type, ref ushort oldType, ref int i, ref int j,
 		ref byte transformations, ConversionSettings settings,
 		byte wasCalled, byte breakBlock, byte replacedBlock)
 	{
-		if (block.From != block.To && value != ConversionRunCodeValues.DontRun) {
+		if (data[blockIndex].From != data[blockIndex].To && value != ConversionRunCodeValues.DontRun) {
 			transformations |= wasCalled;
 
-			int conv = block.To;
+			int conv = data[blockIndex].To;
 			if (conv == Break) {
 				transformations |= breakBlock;
 			}
